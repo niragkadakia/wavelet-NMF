@@ -28,7 +28,7 @@ from misc import computeNumFactors
 
 class wavelet_transform(object):
 	"""
-	Class for  alculating wavelet transform of the data
+	Class for calculating wavelet transform of the data
 	"""
 	
 	def __init__(self, exp_dir='ML_test1', exp_name='0'):
