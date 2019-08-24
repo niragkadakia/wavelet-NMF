@@ -44,30 +44,33 @@ class wavelet_transform(object):
 		  "by 2+ columns; first column is time."
 		
 		self.wavelet = self.metadata['Wavelet']['name']
-		self.nFreqs = int(self.metadata['Wavelet']['num_freqs'])
+		self.num_freqs = int(self.metadata['Wavelet']['num_freqs'])
 		
 		self.subsample = int(self.metadata['Raw data']['subsample'])
-		self.nD = int(self.metadata['Raw data']['length'])
-		if self.nD == -1:
-			self.nD = self.raw_data.shape[0]
+		length_data = int(self.metadata['Raw data']['length'])
+		if length_data == -1:
+			length_data = self.raw_data.shape[0]
 		
-		self.Tt = self.raw_data[:self.nD*self.subsample:self.subsample, 0]
+		self.Tt = self.raw_data[:length_data*self.subsample:self.subsample, 0]
 		self.dt = self.Tt[1] - self.Tt[0]
 		self.nT = len(self.Tt)
 		
-		self.Xx = self.raw_data[:self.nD*self.subsample:self.subsample, 1:]
-		self.nVars = self.Xx.shape[1]
+		self.Xx = self.raw_data[:length_data*self.subsample:self.subsample, 1:]
+		self.num_vars = self.Xx.shape[1]
 		
-		self.cwt_matrix = np.empty((self.nFreqs, self.nT, self.nVars))*np.nan
+		self.cwt_matrix = np.empty((self.num_freqs, self.nT, 
+									self.num_vars))*np.nan
 		
 	def transform(self):
 		"""
 		Wavelet transform each variable separately.
 		"""
 	
-		for iV in range(self.nVars):
-			scales = get_cwt_scales(self.wavelet, 0.01, .1, self.dt, self.nFreqs)
-			coefs, freqs = pywt.cwt(self.Xx[:, iV], scales, self.wavelet, self.dt)			
+		for iV in range(self.num_vars):
+			scales = get_cwt_scales(self.wavelet, 0.01, .1, 
+									self.dt, self.num_freqs)
+			coefs, freqs = pywt.cwt(self.Xx[:, iV], scales, 
+									self.wavelet, self.dt)		
 			self.cwt_matrix[:, :, iV] = abs(coefs)**2.0
 
 		save_cwt_matrix(self.cwt_matrix, self.exp_dir, self.exp_name)
@@ -78,9 +81,9 @@ class wavelet_transform(object):
 		"""
 		
 		cwt_matrix = load_cwt_matrix(self.exp_dir, self.exp_name)
-		for iV in range(self.nVars):
+		for iV in range(self.num_vars):
 			fig = plt.figure(figsize=(15, 4))
-			fig.title('Variable %s' % iV)
+			plt.title('Variable %s' % iV)
 			plt.imshow(cwt_matrix[:, :, iV])
 			plt.show()
 		
@@ -100,18 +103,18 @@ class NMF(object):
 		self.exp_name = exp_name
 		self.metadata = load_metadata(exp_dir)
 		self.cwt_matrix = load_cwt_matrix(exp_dir, exp_name)
-		self.nVars = self.cwt_matrix.shape[2]
-		self.num_patterns = int(self.metadata['NMF']['max_num_patterns'])
+		self.num_vars = self.cwt_matrix.shape[2]
+		self.num_max_patterns = int(self.metadata['NMF']['max_num_patterns'])
 		self.pattern_length = int(self.metadata['NMF']['pattern_length'])
 		
 		min = float(self.metadata['NMF']['seqnmf_norm_min'])
 		max = float(self.metadata['NMF']['seqnmf_norm_max'])
 		num = int(self.metadata['NMF']['seqnmf_norm_steps'])
-		seqnmf_norms = np.geomspace(min, max, num)
+		self.seqnmf_norms = np.geomspace(min, max, num)
 		assert seqnmf_norm_idx < num, "seqnmf_norm_idx must be smaller "\
 			"than seqnmf_norm_steps in metadata"
 		self.seqnmf_norm_idx = seqnmf_norm_idx
-		self.seqnmf_norm = seqnmf_norms[seqnmf_norm_idx]
+		self.seqnmf_norm = self.seqnmf_norms[seqnmf_norm_idx]
 
 		self.tol = tol
 		self.iterations = iterations
@@ -123,10 +126,10 @@ class NMF(object):
 		
 		# To hold NMF results for each variable
 		self.NMF_model_list = []
-		for iV in range(self.nVars):
+		for iV in range(self.num_vars):
 			cwt_matrix = self.cwt_matrix[:, :, iV]
 			
-			model = CNMF(self.num_patterns, self.pattern_length, 
+			model = CNMF(self.num_max_patterns, self.pattern_length, 
 						 l2_scfo=self.seqnmf_norm, l1_W=0, l1_H=0, 
 						 n_iter_max=self.iterations, tol=self.tol)
 			model.fit(cwt_matrix, alg='mult')
@@ -136,19 +139,20 @@ class NMF(object):
 
 	def plot(self):
 		"""
-		Just plot W, H and reconstructed X for each pattern and variable.
+		Just plot W, H and reconstructed X for each pattern and variable, for
+		one seqnmf norm.
 		"""
 		
 		self.NMF_model_list = load_NMF_factors_single_norm(self.exp_dir, 
 								self.exp_name, self.seqnmf_norm_idx)
-		for iV in range(self.nVars):
+		for iV in range(self.num_vars):
 			model = self.NMF_model_list[iV]
-			num_factors = computeNumFactors(model)
+			num_nonzero_patterns = computeNumFactors(model)
 			
-			fig = plt.figure(figsize=(15, 4*num_factors))
+			fig = plt.figure(figsize=(15, 4*num_nonzero_patterns))
 			fig.suptitle('Variable %s' % iV)
-			gs = GridSpec(num_factors*4, 5)
-			for iF in range(num_factors):
+			gs = GridSpec(num_nonzero_patterns*4, 5)
+			for iF in range(num_nonzero_patterns):
 				reconstruct_x = vector_conv(model.W[:, :, iF],
 				  shiftVector(model.H.shift(0)[iF], model.H.L), model._shifts)
 				
@@ -160,12 +164,108 @@ class NMF(object):
 				plt.imshow(reconstruct_x)
 			
 			plt.show()
-					
+
+	def agg_data(self):
+		"""
+		Aggregate the NMF data into a single file for ease of loading.
+		Also calculate reconstruction and regularization errors for 
+		each index and variable.
+		"""
+		
+		cwt_matrix = load_cwt_matrix(self.exp_dir, self.exp_name)
+		NMF_idxs = range(int(self.metadata['NMF']['seqnmf_norm_steps']))
+		Ws = None
+		Hs = None
+		Xs = None
+		errs = np.empty((len(NMF_idxs), self.num_vars, 2))*np.nan
+		
+		for iR in NMF_idxs:
+			print (iR)
+			NMF_model_list = load_NMF_factors_single_norm(self.exp_dir, 
+								self.exp_name, iR)
+			if Ws is None:
+				W_shape = (len(NMF_idxs), self.num_vars, 
+						   self.num_max_patterns) + \
+						   NMF_model_list[0].W[:, :, 0].shape
+				Ws = np.empty(W_shape)*np.nan
+			if Hs is None:
+				H_shape = (len(NMF_idxs), self.num_vars, 
+						   self.num_max_patterns) + \
+						   NMF_model_list[0].H.shift(0)[0].shape
+				Hs = np.empty(H_shape)*np.nan
+			if Xs is None:
+				X_shape = (len(NMF_idxs), self.num_vars, 
+						   self.num_max_patterns, 
+						   W_shape[-1], H_shape[-1])
+				Xs = np.empty(X_shape)*np.nan
+				
+			for iV in range(self.num_vars):
 			
+				# Get W, H, X for each pattern. Full X is sum over patterns.
+				for iP in range(self.num_max_patterns):
+					model = NMF_model_list[iV]
+					Ws[iR, iV, iP] = model.W[:, :, iP]
+					Hs[iR, iV, iP] = model.H.shift(0)[iP]
+					Xs[iR, iV, iP] = vector_conv(Ws[iR, iV, iP], 
+					  shiftVector(model.H.shift(0)[iP], model.H.L), 
+					  model._shifts)
+				
+				norm = np.linalg.norm(cwt_matrix[:, :, iV])
+				reconstruct_err = np.linalg.norm(cwt_matrix[:, :, iV] - 
+									np.sum(Xs[iR, iV], axis=0))/norm
+				regularize_err = compute_scfo_reg(ShiftMatrix(
+									cwt_matrix[:, :, iV], 
+									self.pattern_length), model.W, model.H,	
+									model._shifts, model._kernel)/norm**2
+				errs[iR, iV, 0] = reconstruct_err
+				errs[iR, iV, 1] = regularize_err
 			
-"""
+		save_all_NMF_data(self.exp_dir, self.exp_name, Ws, Hs, Xs, errs)
+		
+	def plot_errs(self):
+		"""
+		Plot the reconstruction and regularization errors
+		"""
+		
+		errs = load_NMF_errs(self.exp_dir, self.exp_name)
+		for iV in range(self.num_vars):
+			fig = plt.figure(figsize=(8, 3))
+			plt.title('Errors')
+			plt.plot(self.seqnmf_norms,  errs[:, iV, 0], label='rec')
+			plt.plot(self.seqnmf_norms,  errs[:, iV, 1], label='reg')
+			plt.xscale('log')
+			plt.show()
+			
 class PCA(object):
+	"""
+	PCA transform the NMF returned patterns, for a given range of regularizer.
+	PCA is done on the reconstructed data matrices.
+	"""
 	
+	def __init__(self, exp_dir='ML_test1', exp_name='0', num_components=None,
+				 variance_explained=0.95):
+		## TODO
+		"""
+		Initialize data experiment folder, metadata, load NMF data
+		
+		If num_components is None, number of PCA components will be chosen 
+		to be minimum greater than variance_explained. Otherwise, if 
+		num_components is set, variance_explained is ignored.
+		"""
+		
+		self.exp_dir = exp_dir
+		self.exp_name = exp_name
+		self.metadata = load_metadata(exp_dir)
+		
+		# Load aggregated data.
+		
+		# Indices for which to aggregate data to do PCA reduction.
+		min_idx = float(self.metadata['PCA']['seqnmf_norm_min_idx'])
+		max_idx = float(self.metadata['NMF']['seqnmf_norm_max_idx'])
+		
+	
+	
+"""
 class cluster(object):
 	
 """

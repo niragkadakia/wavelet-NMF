@@ -16,6 +16,7 @@ import configparser
 import pickle
 import gzip
 import datetime
+import h5py
 
 
 def get_data_dir():
@@ -220,3 +221,87 @@ def load_NMF_factors_single_norm(exp_dir, exp_name, seqnmf_norm_idx):
 		NMF_model_list = pickle.load(f)
 	
 	return NMF_model_list
+
+def save_all_NMF_data(exp_dir, exp_name, Ws, Hs, Xs, errs):
+	"""
+	Unpickle the continuous wavelet transform data for all norms
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	Ws, Hs, Xs: numpy arrays
+		NMF data to be saved for all runs
+	"""
+	
+	filename = '%s/%s/%s_NMF_Ws.npz' % (get_data_dir(), exp_dir, exp_name)
+	np.savez_compressed(filename, Ws=Ws)
+	filename = '%s/%s/%s_NMF_Hs.npz' % (get_data_dir(), exp_dir, exp_name)
+	np.savez_compressed(filename, Hs=Hs)
+	filename = '%s/%s/%s_NMF_Xs.npz' % (get_data_dir(), exp_dir, exp_name)
+	np.savez_compressed(filename, Xs=Xs)
+	filename = '%s/%s/%s_NMF_errs.npz' % (get_data_dir(), exp_dir, exp_name)
+	np.savez_compressed(filename, errs=errs)
+	
+def load_all_NMF_data(exp_dir, exp_name):
+	"""
+	Load the NMF data -- W, H, W -- for all seqnmf runs.
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	
+	Returns
+	-------
+	Ws, Hs, Xs: numpy arrays
+		NMF data saved to file. First index is seqnmf norm index, 2nd is 
+		variable, 3rd is pattern number, and last idxs are values.
+	"""
+
+	filename = '%s/%s/%s_NMF_Ws.npz' % (get_data_dir(), exp_dir, exp_name)
+	Ws = np.load(filename)['Ws']
+	filename = '%s/%s/%s_NMF_Hs.npz' % (get_data_dir(), exp_dir, exp_name)
+	Hs = np.load(filename)['Hs']
+	filename = '%s/%s/%s_NMF_Xs.npz' % (get_data_dir(), exp_dir, exp_name)
+	Xs = np.load(filename)['Xs']
+	
+	return Ws, Hs, Xs
+	
+def load_NMF_errs(exp_dir, exp_name):
+	"""
+	Load the reconstruction and regularization errors of NMF data 
+	for all seqnmf runs.
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	
+	Returns
+	-------
+	errs: numpy array
+		NMF error data saved to file. First index is seqnmf norm index, 2nd is 
+		variable, 3rd is either reconstruction error (0) or 
+		regularization error (1)
+	"""
+
+	filename = '%s/%s/%s_NMF_errs.npz' % (get_data_dir(), exp_dir, exp_name)
+	errs = np.load(filename)['errs']
+	
+	return errs
