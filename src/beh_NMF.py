@@ -15,6 +15,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+from sklearn import decomposition
+from sklearn import manifold
 import pywt
 
 sys.path.append("cnmfpy")
@@ -229,10 +231,12 @@ class NMF(object):
 		
 		errs = load_NMF_errs(self.exp_dir, self.exp_name)
 		for iV in range(self.num_vars):
+			rec_errs = errs[:, iV, 0]/max(errs[:, iV, 0])
+			reg_errs = errs[:, iV, 1]/max(errs[:, iV, 1])
 			fig = plt.figure(figsize=(8, 3))
 			plt.title('Errors')
-			plt.plot(self.seqnmf_norms,  errs[:, iV, 0], label='rec')
-			plt.plot(self.seqnmf_norms,  errs[:, iV, 1], label='reg')
+			plt.plot(self.seqnmf_norms,  rec_errs, label='rec')
+			plt.plot(self.seqnmf_norms,  reg_errs, label='reg')
 			plt.xscale('log')
 			plt.show()
 			
@@ -242,29 +246,60 @@ class PCA(object):
 	PCA is done on the reconstructed data matrices.
 	"""
 	
-	def __init__(self, exp_dir='ML_test1', exp_name='0', num_components=None,
-				 variance_explained=0.95):
-		## TODO
+	def __init__(self, exp_dir='ML_test1', exp_name='0'):
 		"""
-		Initialize data experiment folder, metadata, load NMF data
-		
-		If num_components is None, number of PCA components will be chosen 
-		to be minimum greater than variance_explained. Otherwise, if 
-		num_components is set, variance_explained is ignored.
+		Initialize data experiment folder, metadata, load NMF data, set
+		bounds for which seqnmf values to use. 
 		"""
 		
 		self.exp_dir = exp_dir
 		self.exp_name = exp_name
 		self.metadata = load_metadata(exp_dir)
 		
-		# Load aggregated data.
-		
 		# Indices for which to aggregate data to do PCA reduction.
-		min_idx = float(self.metadata['PCA']['seqnmf_norm_min_idx'])
-		max_idx = float(self.metadata['NMF']['seqnmf_norm_max_idx'])
+		self.min_idx = int(self.metadata['PCA']['seqnmf_norm_min_idx'])
+		self.max_idx = int(self.metadata['PCA']['seqnmf_norm_max_idx'])
+		self.num_components = int(self.metadata['PCA']['num_components'])
+		self.num_idxs = self.max_idx - self.min_idx
 		
-	
-	
+		self.Xs = load_all_NMF_data(exp_dir, exp_name)['Xs']
+		self.num_vars = self.Xs.shape[1]
+		self.num_max_patterns = self.Xs.shape[2]
+		
+	def transform_PCA(self):
+		"""
+		Do the PCA dimensionality reduction
+		"""
+		
+		self.X_proj = []
+		self.X_nonzero_idxs = []
+		self.explained_variance = []
+		for iV in range(self.num_vars):
+			
+			# Only grab indices for which at least one X is nonzero
+			nonzero_idxs = np.sum(self.Xs[self.min_idx: self.max_idx, iV], 
+								  axis=(-1, -2)) != 0
+			
+			# Combine Xs from all patterns and all indices, for a given 
+			# variable. Combine all values in X matrix as features. 
+			# Thus, shape is (patterns*seqnmf_idxs, nT*num_freqs)
+			X_flat = np.reshape(self.Xs[self.min_idx: self.max_idx, iV], 
+							  (self.num_max_patterns*self.num_idxs, -1))
+			X_flat_nonzero = X_flat[nonzero_idxs.flatten()]
+			
+			_PCA = decomposition.PCA(n_components=self.num_components)
+			_PCA.fit(X_flat_nonzero)
+			_X_proj = _PCA.transform(X_flat_nonzero)
+			
+			self.X_proj.append(_X_proj)
+			self.X_nonzero_idxs.append(nonzero_idxs)
+			self.explained_variance.append(_PCA.explained_variance_ratio_)
+			print (_PCA.explained_variance_ratio_.sum())
+			
+		save_PCA_data(self.exp_dir, self.exp_name, self.X_proj, 
+					  self.X_nonzero_idxs, self.explained_variance)
+
+
 """
 class cluster(object):
 	

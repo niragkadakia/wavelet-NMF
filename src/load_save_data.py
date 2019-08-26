@@ -184,7 +184,7 @@ def save_NMF_factors(NMF_model_list, exp_dir, exp_name, seqnmf_norm_idx):
 		seqnmf_norm_max, and seqnmf_norm_steps, which are defined in metadata.
 	"""
 
-	filename = '%s/%s/%s_NMF_%d.npy' % (get_data_dir(), exp_dir, exp_name, 
+	filename = '%s/%s/%s_NMF_%d.pkl' % (get_data_dir(), exp_dir, exp_name, 
 										seqnmf_norm_idx)
 	with gzip.open(filename, 'wb') as f:
 		pickle.dump(NMF_model_list,  f)
@@ -215,7 +215,7 @@ def load_NMF_factors_single_norm(exp_dir, exp_name, seqnmf_norm_idx):
 		behavioral variable.
 	"""
 
-	filename = '%s/%s/%s_NMF_%d.npy' % (get_data_dir(), exp_dir, exp_name, 
+	filename = '%s/%s/%s_NMF_%d.pkl' % (get_data_dir(), exp_dir, exp_name, 
 										seqnmf_norm_idx)
 	with gzip.open(filename, 'rb') as f:
 		NMF_model_list = pickle.load(f)
@@ -248,7 +248,8 @@ def save_all_NMF_data(exp_dir, exp_name, Ws, Hs, Xs, errs):
 	filename = '%s/%s/%s_NMF_errs.npz' % (get_data_dir(), exp_dir, exp_name)
 	np.savez_compressed(filename, errs=errs)
 	
-def load_all_NMF_data(exp_dir, exp_name):
+def load_all_NMF_data(exp_dir, exp_name, load_Ws=True, load_Hs=True, 
+					  load_Xs=True):
 	"""
 	Load the NMF data -- W, H, W -- for all seqnmf runs.
 	
@@ -261,22 +262,38 @@ def load_all_NMF_data(exp_dir, exp_name):
 		Name of .txt file within exp_dir containing data. Should be 
 		tab-delimited data whose columns are (time, var1, var2,...)
 		and whose rows are the values at each time.
-	
+	load_Ws, load_Hs, load_Xs: bool
+		Load these if true.
+		
 	Returns
 	-------
-	Ws, Hs, Xs: numpy arrays
-		NMF data saved to file. First index is seqnmf norm index, 2nd is 
+	
+	data: dictionary
+		NMF data saved to file. Contains Ws, Hs, Xs; numpy arrays. 
+		For each array, first index is seqnmf norm index, 2nd is 
 		variable, 3rd is pattern number, and last idxs are values.
 	"""
 
-	filename = '%s/%s/%s_NMF_Ws.npz' % (get_data_dir(), exp_dir, exp_name)
-	Ws = np.load(filename)['Ws']
-	filename = '%s/%s/%s_NMF_Hs.npz' % (get_data_dir(), exp_dir, exp_name)
-	Hs = np.load(filename)['Hs']
-	filename = '%s/%s/%s_NMF_Xs.npz' % (get_data_dir(), exp_dir, exp_name)
-	Xs = np.load(filename)['Xs']
+	Ws = None
+	Hs = None
+	Xs = None
 	
-	return Ws, Hs, Xs
+	if load_Ws == True:
+		filename = '%s/%s/%s_NMF_Ws.npz' % (get_data_dir(), exp_dir, exp_name)
+		Ws = np.load(filename)['Ws']
+	if load_Hs == True:
+		filename = '%s/%s/%s_NMF_Hs.npz' % (get_data_dir(), exp_dir, exp_name)
+		Hs = np.load(filename)['Hs']
+	if load_Xs == True:
+		filename = '%s/%s/%s_NMF_Xs.npz' % (get_data_dir(), exp_dir, exp_name)
+		Xs = np.load(filename)['Xs']
+	
+	data = dict()
+	data['Ws'] = Ws
+	data['Hs'] = Hs
+	data['Xs'] = Xs
+	
+	return data
 	
 def load_NMF_errs(exp_dir, exp_name):
 	"""
@@ -296,7 +313,7 @@ def load_NMF_errs(exp_dir, exp_name):
 	Returns
 	-------
 	errs: numpy array
-		NMF error data saved to file. First index is seqnmf norm index, 2nd is 
+		NMF error data saved to file. First index is seqnmf norm index, 2nd is
 		variable, 3rd is either reconstruction error (0) or 
 		regularization error (1)
 	"""
@@ -305,3 +322,32 @@ def load_NMF_errs(exp_dir, exp_name):
 	errs = np.load(filename)['errs']
 	
 	return errs
+	
+def save_PCA_data(exp_dir, exp_name, X_proj, X_nonzero_idxs, 
+				  explained_variance):
+	"""
+	Save PCA data: nonzero-X indices, projected X for nonzero indices, 
+	explained variance for each PCA component.
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	X_proj: list of length variables, each element is numpy array
+		Projected PCA data. Shape is ((number of patterns)*
+		(seqnmf indices being chosen), length of nonzero indices)
+	X_nonzero_idxs: list of length variables, each element is boolean array
+		Shape is (seqnmf indices being chosen, number of patterns), where
+		value is 1 if X is nonzero.
+	PCA_explained_variance: list of length variables, each element is array
+		Each element gives PCA explained ratio for all PCA components
+	"""
+	
+	filename = '%s/%s/%s_PCA_data.npz' % (get_data_dir(), exp_dir, exp_name)
+	np.savez(filename, X_proj=X_proj, X_nonzero_idxs=X_nonzero_idxs, 
+			explained_variance=explained_variance)
