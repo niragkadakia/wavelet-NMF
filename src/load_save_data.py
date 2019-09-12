@@ -351,3 +351,34 @@ def save_PCA_data(exp_dir, exp_name, X_proj, X_nonzero_idxs,
 	filename = '%s/%s/%s_PCA_data.npz' % (get_data_dir(), exp_dir, exp_name)
 	np.savez(filename, X_proj=X_proj, X_nonzero_idxs=X_nonzero_idxs, 
 			explained_variance=explained_variance)
+
+def load_PCA_data(exp_dir, exp_name):
+	"""
+	Load the PCA data.
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	
+	Returns:
+	data: dictionary 
+		Keys: X_proj: Projected PCA data. Shape is ((number of patterns)*
+		(seqnmf indices being chosen), length of nonzero indices). 
+		X_nonzero_idxs: list of length variables, each element is bool array.
+		Shape is (seqnmf indices being chosen, number of patterns), where
+		value is 1 if X is nonzero.
+		explained_variance: PCA explained variance. list of length variables, 
+		each element is array. Each element gives PCA explained ratio for 
+		all PCA components.
+	"""
+	
+	filename = '%s/%s/%s_PCA_data.npz' % (get_data_dir(), exp_dir, exp_name)
+	data = np.load(filename, allow_pickle=True)
+	
+	return data

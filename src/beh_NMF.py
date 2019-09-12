@@ -19,13 +19,15 @@ from sklearn import decomposition
 from sklearn import manifold
 import pywt
 
-sys.path.append("cnmfpy")
 from load_save_data import *
 from cwt_utils import get_cwt_scales
+from NMF_utils import compute_num_factors
+from cluster_utils import lasso_select
+
+sys.path.append("cnmfpy")
 from cnmf import CNMF
 from conv import ShiftMatrix, vector_conv, shiftVector
 from regularize import compute_scfo_reg
-from misc import computeNumFactors
 
 
 class wavelet_transform(object):
@@ -149,7 +151,7 @@ class NMF(object):
 								self.exp_name, self.seqnmf_norm_idx)
 		for iV in range(self.num_vars):
 			model = self.NMF_model_list[iV]
-			num_nonzero_patterns = computeNumFactors(model)
+			num_nonzero_patterns = compute_num_factors(model)
 			
 			fig = plt.figure(figsize=(15, 4*num_nonzero_patterns))
 			fig.suptitle('Variable %s' % iV)
@@ -240,6 +242,7 @@ class NMF(object):
 			plt.xscale('log')
 			plt.show()
 			
+			
 class PCA(object):
 	"""
 	PCA transform the NMF returned patterns, for a given range of regularizer.
@@ -300,7 +303,72 @@ class PCA(object):
 					  self.X_nonzero_idxs, self.explained_variance)
 
 
-"""
 class cluster(object):
+	"""
+	t-SNE clustering for all NMF patterns in the given range of regularizers.
+	"""
 	
-"""
+	def __init__(self, exp_dir='ML_test1', exp_name='0'):
+		"""
+		Initialize data experiment folder, metadata, load PCA data, set
+		bounds for which seqnmf values to use. 
+		"""
+		
+		self.exp_dir = exp_dir
+		self.exp_name = exp_name
+		self.metadata = load_metadata(exp_dir)
+		
+		# Indices for which to aggregate data to do PCA reduction.
+		self.PCA_data = load_PCA_data(self.exp_dir, self.exp_name)
+		self.proj_Xs = self.PCA_data['X_proj']
+		self.nonzero_idxs = self.PCA_data['X_nonzero_idxs']
+		self.num_vars = len(self.proj_Xs)
+		
+		# Load Ws and Hs to compare
+		NMF_data = load_all_NMF_data(exp_dir, exp_name, load_Xs=False)
+		
+		# Get nonzero values of Hs and Ws in lambda-reduced range
+		min_idx = int(self.metadata['PCA']['seqnmf_norm_min_idx'])
+		max_idx = int(self.metadata['PCA']['seqnmf_norm_max_idx'])		
+		self.Ws = NMF_data['Ws'][min_idx: max_idx]
+		self.Hs = NMF_data['Hs'][min_idx: max_idx]
+		self.nonzero_Hs = []
+		self.nonzero_Ws = []
+		for iV in range(self.num_vars):
+			_H = self.Hs[:, iV, :, :]
+			_W = self.Ws[:, iV, :, :, :]
+			self.nonzero_Hs.append(_H[self.nonzero_idxs[iV]])
+			self.nonzero_Ws.append(_W[self.nonzero_idxs[iV]])
+		
+		# Number of nonzero patterns (points to be plotted)
+		self.num_pts = self.proj_Xs[0].shape[0]
+		self.nT = _H.shape[-1]
+		
+	def transform_tSNE(self, perplexity=30, iterations=2000, grad_norm=1e-7):
+		"""
+		t-SNE reduce the PCA-reduced, flattened X-components of each 
+		nonzero W,H pair. The plots will allow selection of specific regions, 
+		and from these regions will plot the H-vectors and W-vectors for all 
+		points in the region.
+		"""
+		
+		def update_selected_H(selected_idxs):
+			"""
+			Plot H vectors of selected points only.
+			"""
+			
+			ax_h.clear()
+			for iS in selected_idxs:
+				ax_h.plot(self.nonzero_Hs[iV][iS])
+		
+		for iV in range(self.num_vars):
+			tsne_obj = manifold.TSNE(n_components=2, perplexity=perplexity, 
+								 n_iter=iterations, min_grad_norm=grad_norm)
+			tsne_proj_Xs = tsne_obj.fit_transform(self.proj_Xs[iV])
+			
+			fig, (ax_tsne, ax_h) = plt.subplots(2)
+			tsne_pts = ax_tsne.scatter(tsne_proj_Xs[:, 0], 
+									   tsne_proj_Xs[:, 1], s=10)
+			selector = lasso_select(ax_tsne, tsne_pts, update_selected_H)
+			plt.show()
+		
