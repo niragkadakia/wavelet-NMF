@@ -339,8 +339,8 @@ def save_PCA_data(exp_dir, exp_name, X_proj, X_nonzero_idxs,
 		tab-delimited data whose columns are (time, var1, var2,...)
 		and whose rows are the values at each time.
 	X_proj: list of length variables, each element is numpy array
-		Projected PCA data. Shape is ((number of patterns)*
-		(seqnmf indices being chosen), length of nonzero indices)
+		Projected PCA data. Shape is (length of nonzero indices, 
+		number of PCA components)
 	X_nonzero_idxs: list of length variables, each element is boolean array
 		Shape is (seqnmf indices being chosen, number of patterns), where
 		value is 1 if X is nonzero.
@@ -368,8 +368,9 @@ def load_PCA_data(exp_dir, exp_name):
 	
 	Returns:
 	data: dictionary 
-		Keys: X_proj: Projected PCA data. Shape is ((number of patterns)*
-		(seqnmf indices being chosen), length of nonzero indices). 
+		Keys: X_proj: list of length variables, each element is numpy array
+		Projected PCA data. Shape is (length of nonzero indices, 
+		number of PCA components).
 		X_nonzero_idxs: list of length variables, each element is bool array.
 		Shape is (seqnmf indices being chosen, number of patterns), where
 		value is 1 if X is nonzero.
@@ -382,3 +383,57 @@ def load_PCA_data(exp_dir, exp_name):
 	data = np.load(filename, allow_pickle=True)
 	
 	return data
+	
+def save_cluster_data(exp_dir, exp_name, cluster_xys, cluster_type='tsne'):
+	"""
+	Save data result of clustering data.
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	cluster_xys: list of length variables, each element is numpy array
+		Projected clustered data. Shape is (length of nonzero indices, 2)
+	cluster_type: str
+		Type of clustering being performed (t-SNE, umap etc.)
+	"""
+	
+	filename = '%s/%s/%s_cluster_data_%s.npz' % (get_data_dir(), exp_dir, 
+				exp_name, cluster_type)
+	np.savez(filename, cluster_xys=cluster_xys)
+
+def load_cluster_data(exp_dir, exp_name, cluster_type='tsne'):
+	"""
+	Load clustering data.
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	cluster_type: str
+		Type of clustering being performed (t-SNE, umap etc.)
+	
+	Returns:
+	-------
+	
+	data: dictionary
+		keys: cluster_xys: list of length variables, each element is numpy array
+		Projected clustered data. Shape is (length of nonzero indices, 2)
+	"""
+	
+	filename = '%s/%s/%s_cluster_data_%s.npz' % (get_data_dir(), exp_dir, 
+				exp_name, cluster_type)
+	data = np.load(filename, allow_pickle=True)
+	
+	return data
+	

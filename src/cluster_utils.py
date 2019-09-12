@@ -44,6 +44,7 @@ class lasso_select(object):
 	"""
 
 	def __init__(self, ax, collection, update_func, alpha_other=0.3):
+		
 		self.canvas = ax.figure.canvas
 		self.collection = collection
 		self.alpha_other = alpha_other
@@ -63,9 +64,11 @@ class lasso_select(object):
 		self.ind = []
 		
 	def update_vals(self):
+		
 		self.update_func(self.ind)
 
 	def onselect(self, verts):
+		
 		path = Path(verts)
 		self.ind = np.nonzero(path.contains_points(self.xys))[0]
 		self.fc[:, -1] = self.alpha_other
@@ -77,8 +80,37 @@ class lasso_select(object):
 		self.update_vals()
 		
 	def disconnect(self):
+		
 		self.lasso.disconnect_events()
 		self.fc[:, -1] = 1
 		self.collection.set_facecolors(self.fc)
 		self.canvas.draw_idle()
 
+
+class hover_select():
+	"""
+	Get indices of single points over which the mouse is hovering.
+	"""
+	
+	def __init__(self, fig, ax, pts, update_func):
+		
+		self.ax = ax
+		self.pts = pts
+		self.fig = fig
+		self.update_func = update_func
+		
+	def update_vals(self):
+		"""
+		Just update with first index in region. Only plot one W.
+		"""
+		
+		self.update_func(self.ind['ind'][0])
+		
+	def hover(self, event):
+    
+		if event.inaxes == self.ax:
+			cont, self.ind = self.pts.contains(event)
+			if cont:
+				self.update_vals()
+				self.fig.canvas.draw_idle()
+			

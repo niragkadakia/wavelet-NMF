@@ -22,7 +22,7 @@ import pywt
 from load_save_data import *
 from cwt_utils import get_cwt_scales
 from NMF_utils import compute_num_factors
-from cluster_utils import lasso_select
+from cluster_utils import lasso_select, hover_select
 
 sys.path.append("cnmfpy")
 from cnmf import CNMF
@@ -347,12 +347,31 @@ class cluster(object):
 	def transform_tSNE(self, perplexity=30, iterations=2000, grad_norm=1e-7):
 		"""
 		t-SNE reduce the PCA-reduced, flattened X-components of each 
-		nonzero W,H pair. The plots will allow selection of specific regions, 
-		and from these regions will plot the H-vectors and W-vectors for all 
-		points in the region.
+		nonzero W,H pair.
 		"""
 		
-		def update_selected_H(selected_idxs):
+		tSNE_data = []
+		for iV in range(self.num_vars):
+			tsne_obj = manifold.TSNE(n_components=2, perplexity=perplexity, 
+								 n_iter=iterations, min_grad_norm=grad_norm)
+			tsne_proj_Xs = tsne_obj.fit_transform(self.proj_Xs[iV])
+			tSNE_data.append(tsne_proj_Xs)
+			
+		save_cluster_data(self.exp_dir, self.exp_name, tSNE_data, 
+						  cluster_type='tsne')
+			
+	def plot_Hs_in_region(self, cluster_type='tsne'):
+		"""
+		The plots will allow selection of specific regions, 
+		and from these regions will plot the H-vectors for all points in the 
+		region.
+		"""
+		
+		data = load_cluster_data(self.exp_dir, self.exp_name, 
+								 cluster_type=cluster_type)
+		cluster_xys = data['cluster_xys']
+		
+		def update_selected_Hs(selected_idxs):
 			"""
 			Plot H vectors of selected points only.
 			"""
@@ -362,13 +381,37 @@ class cluster(object):
 				ax_h.plot(self.nonzero_Hs[iV][iS])
 		
 		for iV in range(self.num_vars):
-			tsne_obj = manifold.TSNE(n_components=2, perplexity=perplexity, 
-								 n_iter=iterations, min_grad_norm=grad_norm)
-			tsne_proj_Xs = tsne_obj.fit_transform(self.proj_Xs[iV])
-			
 			fig, (ax_tsne, ax_h) = plt.subplots(2)
-			tsne_pts = ax_tsne.scatter(tsne_proj_Xs[:, 0], 
-									   tsne_proj_Xs[:, 1], s=10)
-			selector = lasso_select(ax_tsne, tsne_pts, update_selected_H)
+			tsne_pts = ax_tsne.scatter(cluster_xys[iV][:, 0], 
+									   cluster_xys[iV][:, 1], s=10)
+			selector = lasso_select(ax_tsne, tsne_pts, update_selected_Hs)
+			plt.show()
+		
+	def plot_single_WH(self, cluster_type='tsne'):
+		"""
+		This plot will allow selection of individual points and show the 
+		W-pattern and H-corresponding to it.
+		"""
+		
+		data = load_cluster_data(self.exp_dir, self.exp_name, 
+								 cluster_type=cluster_type)
+		cluster_xys = data['cluster_xys']
+		
+		def update_selected_WH(idx):
+			"""
+			Plot W and H of single points only, hovered over with mouse.
+			"""
+			
+			ax_h.clear()
+			ax_h.plot(self.nonzero_Hs[iV][idx].T)
+			ax_w.clear()
+			ax_w.imshow(self.nonzero_Ws[iV][idx].T)
+			
+		for iV in range(self.num_vars):
+			fig, (ax_tsne, ax_h, ax_w) = plt.subplots(3)
+			tsne_pts = ax_tsne.scatter(cluster_xys[iV][:, 0], 
+									   cluster_xys[iV][:, 1], s=10)
+			selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
+			fig.canvas.mpl_connect("motion_notify_event", selector.hover)
 			plt.show()
 		
