@@ -414,4 +414,3 @@ class cluster(object):
 			selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
 			fig.canvas.mpl_connect("motion_notify_event", selector.hover)
 			plt.show()
-		
