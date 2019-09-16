@@ -86,9 +86,11 @@ class wavelet_transform(object):
 		
 		cwt_matrix = load_cwt_matrix(self.exp_dir, self.exp_name)
 		for iV in range(self.num_vars):
-			fig = plt.figure(figsize=(15, 4))
-			plt.title('Variable %s' % iV)
-			plt.imshow(cwt_matrix[:, :, iV])
+			fig, ax = plt.subplots(2, 1)
+			fig.set_size_inches(15, 4)
+			plt.suptitle('Variable %s' % iV)
+			ax[0].plot(self.Tt, self.Xx[:, iV])
+			ax[1].imshow(cwt_matrix[:, :, iV])
 			plt.show()
 		
 	
