@@ -267,7 +267,11 @@ class PCA(object):
 		self.num_components = int(self.metadata['PCA']['num_components'])
 		self.num_idxs = self.max_idx - self.min_idx
 		
-		self.Xs = load_all_NMF_data(exp_dir, exp_name)['Xs']
+		data_dict = load_all_NMF_data(exp_dir, exp_name, 
+		  load_Xs=True, load_Ws=True)
+		self.Xs = data_dict['Xs']
+		self.Ws = data_dict['Ws']
+		self.pattern_length = self.Ws.shape[-2]
 		self.num_vars = self.Xs.shape[1]
 		self.num_max_patterns = self.Xs.shape[2]
 		
@@ -282,14 +286,19 @@ class PCA(object):
 		for iV in range(self.num_vars):
 			
 			# Only grab indices for which at least one X is nonzero
-			nonzero_idxs = np.sum(self.Xs[self.min_idx: self.max_idx, iV], 
+			# Discount patterns that only appear at boundaries.
+			nonzero_idxs = np.sum(self.Xs[self.min_idx: self.max_idx, iV, :, :,
+								  self.pattern_length:-self.pattern_length],
 								  axis=(-1, -2)) != 0
 			
 			# Combine Xs from all patterns and all indices, for a given 
 			# variable. Combine all values in X matrix as features. 
 			# Thus, shape is (patterns*seqnmf_idxs, nT*num_freqs)
-			X_flat = np.reshape(self.Xs[self.min_idx: self.max_idx, iV], 
-							  (self.num_max_patterns*self.num_idxs, -1))
+			# Also, remove boundaries containing edges -- these have
+			# boundary effects that should be ignored.
+			X_flat = np.reshape(self.Xs[self.min_idx: self.max_idx, iV, :, :,
+								self.pattern_length:-self.pattern_length],
+								(self.num_max_patterns*self.num_idxs, -1))
 			X_flat_nonzero = X_flat[nonzero_idxs.flatten()]
 			
 			_PCA = decomposition.PCA(n_components=self.num_components)
