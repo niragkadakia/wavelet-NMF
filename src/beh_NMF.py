@@ -93,7 +93,69 @@ class wavelet_transform(object):
 			ax[1].imshow(cwt_matrix[:, :, iV])
 			plt.show()
 		
+
+class random_proj_transform(object):
+	"""
+	Class for calculating wavelet transform of the data
+	"""
 	
+	def __init__(self, exp_dir='ML_test4', exp_name='0'):
+		"""
+		Initialize data experiment folder, metadata, load behavioral data
+		"""
+		
+		self.exp_dir = exp_dir
+		self.exp_name = exp_name
+		self.metadata = load_metadata(exp_dir)
+		self.raw_data = load_raw_data(exp_dir, exp_name)
+		assert len(self.raw_data.shape) == 2,"Data must be N rows "\
+		  "by 2+ columns; first column is time."
+		
+		self.num_projs = int(self.metadata['Random Projection']['num_projs'])
+		
+		self.subsample = int(self.metadata['Raw data']['subsample'])
+		length_data = int(self.metadata['Raw data']['length'])
+		if length_data == -1:
+			length_data = self.raw_data.shape[0]
+		
+		self.Tt = self.raw_data[:length_data*self.subsample:self.subsample, 0]
+		self.dt = self.Tt[1] - self.Tt[0]
+		self.nT = len(self.Tt)
+		
+		self.Xx = self.raw_data[:length_data*self.subsample:self.subsample, 1:]
+		self.num_raw_vars = self.Xx.shape[1]
+		self.num_vars = 1
+		
+		self.cwt_matrix = np.empty((self.num_projs, self.nT, 
+		  self.num_vars))*np.nan
+		
+	def transform(self):
+		"""
+		Wavelet transform each variable separately.
+		"""
+	
+		from scipy.stats import special_ortho_group
+		for iF in range(self.num_projs):
+			R = special_ortho_group.rvs(self.num_raw_vars)
+			rot_xy = (np.dot(R, self.Xx.T))**2.0
+			self.cwt_matrix[iF, :, 0] = rot_xy.T[:, 0]
+		save_cwt_matrix(self.cwt_matrix, self.exp_dir, self.exp_name)
+	
+	def plot(self):
+		"""
+		Just quick plot to visualize
+		"""
+		
+		cwt_matrix = load_cwt_matrix(self.exp_dir, self.exp_name)
+		for iV in range(self.num_vars):
+			fig, ax = plt.subplots(2, 1)
+			fig.set_size_inches(15, 4)
+			plt.suptitle('Variable %s' % iV)
+			ax[0].plot(self.Tt, self.Xx[:, iV])
+			ax[1].imshow(cwt_matrix[:, :, iV])
+			plt.show()
+		
+		
 class NMF(object):
 	"""
 	Factorize the wavelet-tranformed data using CNMF/SEQNMF
