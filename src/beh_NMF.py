@@ -49,6 +49,8 @@ class wavelet_transform(object):
 		
 		self.wavelet = self.metadata['Wavelet']['name']
 		self.num_freqs = int(self.metadata['Wavelet']['num_freqs'])
+		self.max_freq = float(self.metadata['Wavelet']['max_freq'])
+		self.min_freq = float(self.metadata['Wavelet']['min_freq'])
 		
 		self.subsample = int(self.metadata['Raw data']['subsample'])
 		length_data = int(self.metadata['Raw data']['length'])
@@ -71,7 +73,7 @@ class wavelet_transform(object):
 		"""
 	
 		for iV in range(self.num_vars):
-			scales = get_cwt_scales(self.wavelet, 0.01, .1, 
+			scales = get_cwt_scales(self.wavelet, self.min_freq, self.max_freq,
 									self.dt, self.num_freqs)
 			coefs, freqs = pywt.cwt(self.Xx[:, iV], scales, 
 									self.wavelet, self.dt)		
@@ -356,7 +358,7 @@ class PCA(object):
 			# Discount patterns that only appear at boundaries.
 			nonzero_idxs = np.sum(self.Xs[self.min_idx: self.max_idx, iV, :, :,
 								  self.pattern_length:-self.pattern_length],
-								  axis=(-1, -2)) != 0
+								  axis=(-1, -2)) > 1e-5
 			
 			# Combine Xs from all patterns and all indices, for a given 
 			# variable. Combine all values in X matrix as features. 
@@ -465,6 +467,152 @@ class cluster(object):
 			selector = lasso_select(ax_tsne, tsne_pts, update_selected_Hs)
 			plt.show()
 		
+	def plot_single_WH(self, cluster_type='tsne'):
+		"""
+		This plot will allow selection of individual points and show the 
+		W-pattern and H-corresponding to it.
+		"""
+		
+		data = load_cluster_data(self.exp_dir, self.exp_name, 
+								 cluster_type=cluster_type)
+		cluster_xys = data['cluster_xys']
+		
+		def update_selected_WH(idx):
+			"""
+			Plot W and H of single points only, hovered over with mouse.
+			"""
+			
+			ax_h.clear()
+			ax_h.plot(self.nonzero_Hs[iV][idx].T)
+			ax_w.clear()
+			ax_w.imshow(self.nonzero_Ws[iV][idx].T)
+			
+		for iV in range(self.num_vars):
+			fig, (ax_tsne, ax_h, ax_w) = plt.subplots(3)
+			tsne_pts = ax_tsne.scatter(cluster_xys[iV][:, 0], 
+									   cluster_xys[iV][:, 1], s=10)
+			selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
+			fig.canvas.mpl_connect("motion_notify_event", selector.hover)
+			plt.show()
+
+
+class corr_multiple_vars(object):
+	"""
+	Use correlation analysis to analyze the data for multiple variables,
+	each of which is wavelet transformed.
+	"""
+	
+	def __init__(self, exp_dir='ML_test3', exp_name='0'):
+		"""
+		Initialize data experiment folder, metadata, load PCA data, set
+		bounds for which seqnmf values to use. 
+		"""
+		
+		## UNDER CONSTRUCTION
+		
+		self.exp_dir = exp_dir
+		self.exp_name = exp_name
+		self.metadata = load_metadata(exp_dir)
+		
+		# Indices for which to aggregate data to do PCA reduction.
+		self.PCA_data = load_PCA_data(self.exp_dir, self.exp_name)
+		self.proj_Xs = self.PCA_data['X_proj']
+		self.nonzero_idxs = self.PCA_data['X_nonzero_idxs']
+		self.num_vars = len(self.proj_Xs)
+		
+		# Load Ws and Hs to compare
+		NMF_data = load_all_NMF_data(exp_dir, exp_name, load_Xs=False)
+		
+		# Get nonzero values of Hs and Ws in lambda-reduced range
+		min_idx = int(self.metadata['PCA']['seqnmf_norm_min_idx'])
+		max_idx = int(self.metadata['PCA']['seqnmf_norm_max_idx'])		
+		self.Ws = NMF_data['Ws'][min_idx: max_idx]
+		self.Hs = NMF_data['Hs'][min_idx: max_idx]
+		self.nonzero_Hs = []
+		self.nonzero_Ws = []
+		for iV in range(self.num_vars):
+			_H = self.Hs[:, iV, :, :]
+			_W = self.Ws[:, iV, :, :, :]
+			self.nonzero_Hs.append(_H[self.nonzero_idxs[iV]])
+			self.nonzero_Ws.append(_W[self.nonzero_idxs[iV]])
+		
+		# Number of nonzero patterns (points to be plotted)
+		self.num_pts = self.proj_Xs[0].shape[0]
+		self.nT = _H.shape[-1]
+	
+	def correlate(self, var1=0, var2=1):
+		"""
+		"""
+		
+		n1 = len(self.nonzero_Hs[0])
+		n2 = len(self.nonzero_Hs[1])
+		print (n1, n2)
+		
+		np.random.seed(0)
+		rands1 = np.repeat(np.arange(n1), n2)
+		rands2 = np.tile(np.arange(n2), n1)
+		
+		corrs = np.empty((n1, n2))*np.nan
+		
+		for i in range(n1):
+			print (i)
+			for j in range(n2):
+				
+				data1 = self.nonzero_Hs[0][i, :]
+				data2 = self.nonzero_Hs[1][j, :]
+
+				wind = 35
+				
+				normdata1 = data1/np.sum(data1)
+				normdata2 = data2/np.sum(data2)
+				normdata1_trunc = normdata1[20 + wind: -20-wind]
+				normdata2_trunc = normdata2[20:-20]
+					
+				conv = np.correlate(normdata2_trunc, normdata1_trunc, mode='valid')
+				corrs[i, j] = max(conv)
+				
+				"""
+				if (max(conv) > 0.007)*(max(conv) < 0.01):
+					
+					idx = np.argmax(conv)
+					print (idx)
+					fig = plt.figure(figsize=(10, 5))
+					plt.subplot(311)
+					plt.plot(normdata1_trunc)
+					plt.plot(normdata2_trunc[idx:])
+					plt.subplot(312)
+					plt.plot(normdata2_trunc[idx:][:len(normdata1_trunc)]*normdata1_trunc*100)
+					plt.subplot(313)
+					plt.plot(conv)
+					plt.show()
+				"""
+				
+		
+		
+		self.corrs = corrs
+		plt.hist(corrs[np.isfinite(corrs)].flatten(), bins=200)
+		plt.show()
+		print (len(corrs.flatten()))
+		print (np.sum(corrs > 0.008))
+		plt.imshow(corrs)
+		plt.show()
+		
+	def transform_tSNE(self, perplexity=30, iterations=2000, grad_norm=1e-7):
+		"""
+		t-SNE reduce the PCA-reduced, flattened X-components of each 
+		nonzero W,H pair.
+		"""
+		
+		tSNE_data = []
+		for iV in range(self.num_vars):
+			tsne_obj = manifold.TSNE(n_components=2, perplexity=perplexity, 
+								 n_iter=iterations, min_grad_norm=grad_norm)
+			tsne_proj_Xs = tsne_obj.fit_transform(self.proj_Xs[iV])
+			tSNE_data.append(tsne_proj_Xs)
+			
+		save_cluster_data(self.exp_dir, self.exp_name, tSNE_data, 
+						  cluster_type='tsne')
+			
 	def plot_single_WH(self, cluster_type='tsne'):
 		"""
 		This plot will allow selection of individual points and show the 
