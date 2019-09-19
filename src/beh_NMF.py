@@ -104,6 +104,8 @@ class random_proj_transform(object):
 		Initialize data experiment folder, metadata, load behavioral data
 		"""
 		
+		## TODO This class is still under construction
+		
 		self.exp_dir = exp_dir
 		self.exp_name = exp_name
 		self.metadata = load_metadata(exp_dir)
@@ -123,6 +125,9 @@ class random_proj_transform(object):
 		self.nT = len(self.Tt)
 		
 		self.Xx = self.raw_data[:length_data*self.subsample:self.subsample, 1:]
+		
+		# Data variabls is num_raw_vars. However, only transformed data only 
+		# uses one variable that is a lin.comb. of the original space.
 		self.num_raw_vars = self.Xx.shape[1]
 		self.num_vars = 1
 		
@@ -487,3 +492,5 @@ class cluster(object):
 			selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
 			fig.canvas.mpl_connect("motion_notify_event", selector.hover)
 			plt.show()
+
+
