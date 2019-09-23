@@ -72,9 +72,9 @@ class wavelet_transform(object):
 		Wavelet transform each variable separately.
 		"""
 	
-		for iV in range(self.num_vars):
-			scales = get_cwt_scales(self.wavelet, self.min_freq, self.max_freq,
+		scales = get_cwt_scales(self.wavelet, self.min_freq, self.max_freq,
 									self.dt, self.num_freqs)
+		for iV in range(self.num_vars):
 			coefs, freqs = pywt.cwt(self.Xx[:, iV], scales, 
 									self.wavelet, self.dt)		
 			self.cwt_matrix[:, :, iV] = abs(coefs)**2.0
@@ -86,13 +86,22 @@ class wavelet_transform(object):
 		Just quick plot to visualize
 		"""
 		
+		scales = get_cwt_scales(self.wavelet, self.min_freq, self.max_freq,
+									self.dt, self.num_freqs)
 		cwt_matrix = load_cwt_matrix(self.exp_dir, self.exp_name)
 		for iV in range(self.num_vars):
 			fig, ax = plt.subplots(2, 1)
 			fig.set_size_inches(15, 4)
 			plt.suptitle('Variable %s' % iV)
+			
 			ax[0].plot(self.Tt, self.Xx[:, iV])
-			ax[1].imshow(cwt_matrix[:, :, iV])
+			ax[0].set_xlim(self.Tt[0], self.Tt[-1])
+			
+			y, x = np.meshgrid(np.log(scales[::-1])/np.log(10), self.Tt)
+			ax[1].set_xlim(self.Tt[0], self.Tt[-1])
+			ax[1].pcolormesh(x, y, cwt_matrix[:, :, iV].T)
+			plt.ylabel('log freq') 
+			plt.xlabel('Time')
 			plt.show()
 		
 
@@ -138,7 +147,7 @@ class random_proj_transform(object):
 		
 	def transform(self):
 		"""
-		Wavelet transform each variable separately.
+		Random rotation (SO(n)) of variables into new space.
 		"""
 	
 		from scipy.stats import special_ortho_group
@@ -496,38 +505,47 @@ class cluster(object):
 			plt.show()
 
 
-class corr_multiple_vars(object):
+class correlate_multiple_vars(object):
 	"""
 	Use correlation analysis to analyze the data for multiple variables,
 	each of which is wavelet transformed.
+	
+	Uses parameters of PCA to get the minimum and maximum norms to use for
+	correlation.
 	"""
 	
-	def __init__(self, exp_dir='ML_test3', exp_name='0'):
+	def __init__(self, exp_dir='ML_test2', exp_name='0', corr_vars=[0, 1],
+				 num_max_corr_patterns=5000):
 		"""
 		Initialize data experiment folder, metadata, load PCA data, set
 		bounds for which seqnmf values to use. 
 		"""
 		
-		## UNDER CONSTRUCTION
-		
 		self.exp_dir = exp_dir
 		self.exp_name = exp_name
 		self.metadata = load_metadata(exp_dir)
 		
-		# Indices for which to aggregate data to do PCA reduction.
+		# Indices for nonzero Xs -- use PCA to get nonzero vals and ranges
 		self.PCA_data = load_PCA_data(self.exp_dir, self.exp_name)
-		self.proj_Xs = self.PCA_data['X_proj']
 		self.nonzero_idxs = self.PCA_data['X_nonzero_idxs']
-		self.num_vars = len(self.proj_Xs)
 		
 		# Load Ws and Hs to compare
 		NMF_data = load_all_NMF_data(exp_dir, exp_name, load_Xs=False)
+		
+		# Indices of variables to correlate
+		self.var1 = corr_vars[0]
+		self.var2 = corr_vars[1]
+		
+		# Max number of pairs to use for PCA
+		self.num_max_corr_patterns = num_max_corr_patterns
 		
 		# Get nonzero values of Hs and Ws in lambda-reduced range
 		min_idx = int(self.metadata['PCA']['seqnmf_norm_min_idx'])
 		max_idx = int(self.metadata['PCA']['seqnmf_norm_max_idx'])		
 		self.Ws = NMF_data['Ws'][min_idx: max_idx]
 		self.Hs = NMF_data['Hs'][min_idx: max_idx]
+		self.num_vars = self.Ws.shape[1]
+		
 		self.nonzero_Hs = []
 		self.nonzero_Ws = []
 		for iV in range(self.num_vars):
@@ -536,92 +554,212 @@ class corr_multiple_vars(object):
 			self.nonzero_Hs.append(_H[self.nonzero_idxs[iV]])
 			self.nonzero_Ws.append(_W[self.nonzero_idxs[iV]])
 		
-		# Number of nonzero patterns (points to be plotted)
-		self.num_pts = self.proj_Xs[0].shape[0]
-		self.nT = _H.shape[-1]
-	
-	def correlate(self, var1=0, var2=1):
+	def calc_2_var_corrs(self):
 		"""
+		Get the maximum cross-correlation in a small time lag between 
+		the H vectors of two data variables, for all possible combinations
+		of H_1 and H_2.
 		"""
 		
-		n1 = len(self.nonzero_Hs[0])
-		n2 = len(self.nonzero_Hs[1])
-		print (n1, n2)
+		num_var1_patterns = len(self.nonzero_Hs[self.var1])
+		num_var2_patterns = len(self.nonzero_Hs[self.var2])
 		
-		np.random.seed(0)
-		rands1 = np.repeat(np.arange(n1), n2)
-		rands2 = np.tile(np.arange(n2), n1)
+		corrs = np.empty((num_var1_patterns, num_var2_patterns))*np.nan
+		corr_shifts = np.empty((num_var1_patterns, num_var2_patterns))*np.nan
 		
-		corrs = np.empty((n1, n2))*np.nan
-		
-		for i in range(n1):
-			print (i)
-			for j in range(n2):
+		for iP in range(num_var1_patterns):
+			print (iP, 'of', num_var1_patterns)
+			for jP in range(num_var2_patterns):
 				
-				data1 = self.nonzero_Hs[0][i, :]
-				data2 = self.nonzero_Hs[1][j, :]
+				H1 = self.nonzero_Hs[self.var1][iP]
+				H2 = self.nonzero_Hs[self.var2][jP]
 
-				wind = 35
+				W1 = self.nonzero_Ws[self.var1][iP].T
+				W2 = self.nonzero_Ws[self.var2][jP].T
 				
-				normdata1 = data1/np.sum(data1)
-				normdata2 = data2/np.sum(data2)
-				normdata1_trunc = normdata1[20 + wind: -20-wind]
-				normdata2_trunc = normdata2[20:-20]
-					
-				conv = np.correlate(normdata2_trunc, normdata1_trunc, mode='valid')
-				corrs[i, j] = max(conv)
+				# Absolute value of max correlation lag
+				corr_len = W1.shape[1]
+				H1 /= np.mean(H1)
+				H2 /= np.mean(H2)
 				
-				"""
-				if (max(conv) > 0.007)*(max(conv) < 0.01):
-					
-					idx = np.argmax(conv)
-					print (idx)
-					fig = plt.figure(figsize=(10, 5))
-					plt.subplot(311)
-					plt.plot(normdata1_trunc)
-					plt.plot(normdata2_trunc[idx:])
-					plt.subplot(312)
-					plt.plot(normdata2_trunc[idx:][:len(normdata1_trunc)]*normdata1_trunc*100)
-					plt.subplot(313)
-					plt.plot(conv)
-					plt.show()
-				"""
-				
+				corr = np.correlate(H2, H1[corr_len:-corr_len], mode='valid')
+				corrs[iP, jP] = max(corr)
+				corr_shifts[iP, jP] = corr_len - np.argmax(corr)
+		corr_shifts = corr_shifts.astype('int')
 		
+		save_2_var_corrs(self.exp_dir, self.exp_name, 
+		  self.var1, self.var2, corrs, corr_shifts)
 		
-		self.corrs = corrs
-		plt.hist(corrs[np.isfinite(corrs)].flatten(), bins=200)
-		plt.show()
-		print (len(corrs.flatten()))
-		print (np.sum(corrs > 0.008))
-		plt.imshow(corrs)
+	def plot_2_var_corrs_hist(self, bins=200, min=10):
+		"""
+		Plot histogram of all max-cross-correlations between two variables.
+		"""
+		
+		_data = load_2_var_corrs(self.exp_dir, self.exp_name, 
+								 self.var1, self.var2)
+		corrs = (_data['corrs']).flatten()
+		fig = plt.figure(figsize=(10, 5))
+		plt.hist(corrs[corrs > min], bins=bins)
 		plt.show()
 		
-	def transform_tSNE(self, perplexity=30, iterations=2000, grad_norm=1e-7):
+	def calc_2_vars_XWHs(self):
+		"""
+		Stack the wavelet transforms for pairs of factorizations between
+		two variables, where the H-vectors of the factorizations have a 
+		given correlation.
+		"""
+	
+		## Rename this funcs
+	
+		_data = load_2_var_corrs(self.exp_dir, self.exp_name, 
+								 self.var1, self.var2)
+		corr_shifts = _data['corr_shifts']
+		corrs = _data['corrs']
+		num_var1_patterns = corrs.shape[0]
+		num_var2_patterns = corrs.shape[1]
+		
+		# Get correlation ranges from metadata -- this is pretty ugly but quick
+		cutpoints_str = self.metadata['2-var Correlations']['cutpoints']
+		cutpoints = np.array(list(filter(None, cutpoints_str.split("\n"))), 
+		  dtype='int')
+		
+		# Load all nonzero Xs for the two variables; delete data array for mem
+		_data = load_all_NMF_data(self.exp_dir, self.exp_name, load_Xs=False, 
+								  load_Ws=True, load_Hs=True)
+		_H = _data['Hs'][:, self.var1, :, :]
+		nonzero_Hs_1 = _H[self.nonzero_idxs[self.var1]]
+		_H = _data['Hs'][:, self.var2, :, :]
+		nonzero_Hs_2 = _H[self.nonzero_idxs[self.var2]]
+		_W = _data['Ws'][:, self.var1, :, :, :]
+		nonzero_Ws_1 = _W[self.nonzero_idxs[self.var1]]
+		_W = _data['Ws'][:, self.var2, :, :, :]
+		nonzero_Ws_2 = _W[self.nonzero_idxs[self.var2]]
+		nFreqs = nonzero_Ws_1.shape[-1]*2
+		
+		del (_data)
+		del (_H)
+		del (_W)
+		
+		var1_idxs = np.random.choice(num_var1_patterns, size=1000000)
+		var2_idxs = np.random.choice(num_var2_patterns, size=1000000)
+		idxs = np.vstack((var1_idxs, var2_idxs)).T
+		
+		for iC in range(len(cutpoints) - 1):
+			Xs = []
+			Hs = []
+			Ws = []
+			saved_idxs = []
+			corr_lo = cutpoints[iC]
+			corr_hi = cutpoints[iC + 1]
+			for iP, jP in idxs:
+				print (len(Xs), '...', iP, jP)
+				if (corrs[iP, jP] > corr_hi) or \
+				  (corrs[iP, jP] < corr_lo):
+					continue
+				
+				H1 = nonzero_Hs_1[iP]
+				H2 = nonzero_Hs_2[jP]
+				W1 = nonzero_Ws_1[iP]
+				W2 = nonzero_Ws_2[jP]
+				
+				idx = corr_shifts[iP, jP]
+				
+				# Shift H2 to align to max correlation with H1; backshift W2
+				H2_shift = np.roll(H2, idx)
+				W2_shift = np.roll(W2, -idx, axis=1)
+				if idx < 0:
+					H2_shift[idx:] = 0
+					W2_shift[:, idx:] = 0
+				elif idx >= 0:
+					H2_shift[:idx] = 0
+					W2_shift[:, :idx] = 0
+				H = H1*H2_shift
+				W = np.vstack((W1.T, W2_shift.T))
+				
+				X = np.zeros((nFreqs, len(H)))
+				for iF in range(nFreqs):
+					X[iF] = np.convolve(W[iF], H, mode='same')
+				#plt.imshow(X)
+				#plt.show()
+				
+				Xs.append(X.astype(np.float16))
+				Ws.append(W)
+				Hs.append(H)
+				saved_idxs.append([iP, jP])
+				
+				if len(Xs) >= self.num_max_corr_patterns:
+					break	
+								
+			saved_idxs = np.asarray(saved_idxs).astype(np.int)
+			Xs = np.asarray(Xs)
+			Ws = np.asarray(Ws)
+			Hs = np.asarray(Hs)
+			save_2_var_XWHs(self.exp_dir, self.exp_name, 
+									  self.var1, self.var2, iC, Xs, 
+									  Ws, Hs, saved_idxs)
+	
+	def PCA(self):
+		"""
+		Initialize data experiment folder, metadata, load NMF data, set
+		bounds for which seqnmf values to use. 
+		"""
+		
+		# Get correlation ranges from metadata -- this is pretty ugly but quick
+		cutpoints_str = self.metadata['2-var Correlations']['cutpoints']
+		cutpoints = np.array(list(filter(None, cutpoints_str.split("\n"))), 
+		  dtype='int')
+		
+		# Indices for which to aggregate data to do PCA reduction.
+		self.num_components = int(self.metadata['PCA']['num_components'])
+		
+		for iC in range(len(cutpoints) - 1):
+			
+			_data = load_2_var_XWHs(self.exp_dir, self.exp_name, 
+					  self.var1, self.var2, iC)
+			Xs = _data['Xs']
+			Xs_flat = np.reshape(Xs, (Xs.shape[0], -1))
+
+			_PCA = decomposition.PCA(n_components=self.num_components)
+			_PCA.fit(Xs_flat)
+			X_proj = _PCA.transform(Xs_flat)
+			print (_PCA.explained_variance_ratio_.sum())
+			
+			save_2_var_PCA(self.exp_dir, self.exp_name, 
+									  self.var1, self.var2, iC, X_proj)
+									  
+	def transform_tSNE(self, perplexity=100, iterations=2000, grad_norm=1e-7):
 		"""
 		t-SNE reduce the PCA-reduced, flattened X-components of each 
 		nonzero W,H pair.
 		"""
 		
-		tSNE_data = []
-		for iV in range(self.num_vars):
+		# Get correlation ranges from metadata -- this is pretty ugly but quick
+		cutpoints_str = self.metadata['2-var Correlations']['cutpoints']
+		cutpoints = np.array(list(filter(None, cutpoints_str.split("\n"))), 
+		  dtype='int')
+		
+		for iC in range(len(cutpoints) - 1):
+			data = load_2_var_PCA(self.exp_dir, self.exp_name, 
+											 self.var1, self.var2, iC)
+			proj_Xs = data['X_proj']
 			tsne_obj = manifold.TSNE(n_components=2, perplexity=perplexity, 
 								 n_iter=iterations, min_grad_norm=grad_norm)
-			tsne_proj_Xs = tsne_obj.fit_transform(self.proj_Xs[iV])
-			tSNE_data.append(tsne_proj_Xs)
+			tsne_proj_Xs = tsne_obj.fit_transform(proj_Xs)
+			save_2_var_tSNE(self.exp_dir, self.exp_name, self.var1, 
+								 self.var2, iC, tsne_proj_Xs)
 			
-		save_cluster_data(self.exp_dir, self.exp_name, tSNE_data, 
-						  cluster_type='tsne')
-			
-	def plot_single_WH(self, cluster_type='tsne'):
+	def plot_single_WH(self, cluster_type='tsne', cutpoint_idx=0):
 		"""
 		This plot will allow selection of individual points and show the 
 		W-pattern and H-corresponding to it.
 		"""
 		
-		data = load_cluster_data(self.exp_dir, self.exp_name, 
-								 cluster_type=cluster_type)
-		cluster_xys = data['cluster_xys']
+		_data = load_2_var_tSNE(self.exp_dir, self.exp_name, 0, 1, 0)
+		cluster_xys = _data['cluster_xys']
+		_data = load_2_var_XWHs(self.exp_dir, self.exp_name, 
+					  self.var1, self.var2, cutpoint_idx)
+		self.Ws = _data['Ws']
+		self.Hs = _data['Hs']
 		
 		def update_selected_WH(idx):
 			"""
@@ -629,16 +767,16 @@ class corr_multiple_vars(object):
 			"""
 			
 			ax_h.clear()
-			ax_h.plot(self.nonzero_Hs[iV][idx].T)
+			ax_h.plot(self.Hs[idx])
 			ax_w.clear()
-			ax_w.imshow(self.nonzero_Ws[iV][idx].T)
+			ax_w.set_xlim(0, 500)
+			ax_w.pcolormesh(self.Ws[idx][::-1])
 			
-		for iV in range(self.num_vars):
-			fig, (ax_tsne, ax_h, ax_w) = plt.subplots(3)
-			tsne_pts = ax_tsne.scatter(cluster_xys[iV][:, 0], 
-									   cluster_xys[iV][:, 1], s=10)
-			selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
-			fig.canvas.mpl_connect("motion_notify_event", selector.hover)
-			plt.show()
+		fig, (ax_tsne, ax_h, ax_w) = plt.subplots(3)
+		tsne_pts = ax_tsne.scatter(cluster_xys[:, 0], 
+								   cluster_xys[:, 1], s=10)
+		selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
+		fig.canvas.mpl_connect("motion_notify_event", selector.hover)
+		plt.show()
 
 

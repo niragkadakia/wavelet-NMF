@@ -224,7 +224,7 @@ def load_NMF_factors_single_norm(exp_dir, exp_name, seqnmf_norm_idx):
 
 def save_all_NMF_data(exp_dir, exp_name, Ws, Hs, Xs, errs):
 	"""
-	Unpickle the continuous wavelet transform data for all norms
+	Pickle the continuous wavelet transform data for all norms
 	
 	Args
 	-------
@@ -435,5 +435,227 @@ def load_cluster_data(exp_dir, exp_name, cluster_type='tsne'):
 				exp_name, cluster_type)
 	data = np.load(filename, allow_pickle=True)
 	
+	return data
+	
+def save_2_var_corrs(exp_dir, exp_name, var1, var2, corrs, corr_shifts):
+	"""
+	Save the continuous wavelet transform data for all norms
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	corrs: (N, M) numpy array
+		max value of small-lag correlations between H-vectors of var1 and var2
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d.npz' % (get_data_dir(), exp_dir,
+	  exp_name, var1, var2)
+	np.savez(filename, corrs=corrs, corr_shifts=corr_shifts)
+	
+def load_2_var_corrs(exp_dir, exp_name, var1=0, var2=1):
+	"""
+	Unpickle the continuous wavelet transform data for all norms
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	
+	Returns:
+	-------
+	
+	corrs: (N, M) numpy array
+		max value of small-lag correlations between H-vectors of var1 and var2
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d.npz' % (get_data_dir(), exp_dir, 
+	  exp_name, var1, var2)
+	data = np.load(filename, allow_pickle=True)
+	
+	return data
+	
+def save_2_var_XWHs(exp_dir, exp_name, var1, var2, cutpoint_idx, 
+							  Xs, Ws, Hs, saved_idxs):
+	"""
+	Save the continuous wavelet transform data for all norms
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	cutpoint_idx: int
+		index of which cutpoint range based on size of correlation
+	Xs, Ws, Hs: list s
+		arrays to save
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d_XWH_iC_%d.npz' % (get_data_dir(), 
+	  exp_dir, exp_name, var1, var2, cutpoint_idx)
+	np.savez_compressed(filename, Xs=Xs, Ws=Ws, Hs=Hs, saved_idxs=saved_idxs)
+	
+def load_2_var_XWHs(exp_dir, exp_name, var1, var2, cutpoint_idx):
+	"""
+	Save the continuous wavelet transform data for all norms
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	cutpoint_idx: int
+		index of which cutpoint range based on size of correlation
+	
+	Returns:
+	-------
+	
+	Xs: list 
+		X arrays loaded for these two variables
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d_XWH_iC_%d.npz' % (get_data_dir(), 
+	  exp_dir, exp_name, var1, var2, cutpoint_idx)
+	data = np.load(filename, allow_pickle=True)
+	
+	return data
+	
+def save_2_var_PCA(exp_dir, exp_name, var1, var2, cutpoint_idx, 
+							  X_proj):
+	"""
+	Save PCA-reduced stacked X-vectors for the correlated variables
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	cutpoint_idx: int
+		index of which cutpoint range based on size of correlation
+	X_proj: (N, M) array
+		Numbeor of X vectors by PCA dimensions.
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d_PCA_iC_%d.npz' % (get_data_dir(), 
+	  exp_dir, exp_name, var1, var2, cutpoint_idx)
+	data = np.savez(filename, X_proj=X_proj)
+	
+def load_2_var_PCA(exp_dir, exp_name, var1, var2, cutpoint_idx):
+	"""
+	Save PCA-reduced stacked X-vectors for the correlated variables
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	cutpoint_idx: int
+		index of which cutpoint range based on size of correlation
+	
+	Returns:
+	-------
+	
+	data: dictionary of data
+		Has PCA-projectedd Xs: shape = X vectors by PCA dimensions.
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d_PCA_iC_%d.npz' % (get_data_dir(),
+	  exp_dir, exp_name, var1, var2, cutpoint_idx)
+	data = np.load(filename, allow_pickle=True)
+	
+	return data
+	
+def save_2_var_tSNE(exp_dir, exp_name, var1, var2, cutpoint_idx, 
+							  X_proj_tSNE):
+	"""
+	Save tSNE-d X-vectors for the correlated variables
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	cutpoint_idx: int
+		index of which cutpoint range based on size of correlation
+	X_proj: (N, M) array
+		Numbeor of X vectors by PCA dimensions.
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d_tSNE_iC_%d.npz' % (get_data_dir(), 
+	  exp_dir, exp_name, var1, var2, cutpoint_idx)
+	np.savez(filename, cluster_xys=X_proj_tSNE)
+	
+def load_2_var_tSNE(exp_dir, exp_name, var1, var2, cutpoint_idx):
+	"""
+	Save tSNE-d X-vectors for the correlated variables
+	
+	Args
+	-------
+	
+	exp_dir: str
+		Name of experiment subdirectory within data_dir
+	exp_name: str
+		Name of .txt file within exp_dir containing data. Should be 
+		tab-delimited data whose columns are (time, var1, var2,...)
+		and whose rows are the values at each time.
+	var1, var2: ints
+		Which variables have been correlated.
+	cutpoint_idx: int
+		index of which cutpoint range based on size of correlation
+	
+	Returns:
+	-------
+	
+	data: dictionary holding tSNE x-ys
+	"""
+	
+	filename = '%s/%s/%s_corr_vars_%d_%d_tSNE_iC_%d.npz' % (get_data_dir(), 
+	  exp_dir, exp_name, var1, var2, cutpoint_idx)
+	data = np.load(filename, allow_pickle=True)
+		
 	return data
 	
