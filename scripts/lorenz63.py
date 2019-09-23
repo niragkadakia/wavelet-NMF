@@ -13,21 +13,24 @@ import numpy as np
 from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 
-def lorenz96(x, t):
-	return (np.roll(x, -1) - np.roll(x, 2))*np.roll(x, 1) - x + 8
+def lorenz63(X, t, s=10, r=28, b=2.667):
+	x, y, z = X
+	x_dot = s*(y - x)
+	y_dot = r*x - y - x*z
+	z_dot = x*y - b*z
+	return x_dot, y_dot, z_dot
+	
+t = np.linspace(0, 50, 5000)
+x0 = [0, 1.5, 1.05]
 
-nD = 10
-vars_to_save = [1, 2, 8]
-
-t = np.linspace(0, 50, 1000)
-np.random.seed(50)
-x0 = np.random.uniform(-10, 10, 10)
-
-sol = odeint(lorenz96, x0, t)
+sol = odeint(lorenz63, x0, t)
 
 dir = 'C:/Users/nk479/Dropbox (emonetlab)/users' +\
-		'/nirag_kadakia/data/beh-NMF/lorenz95'
-data = np.vstack((t, sol[:, vars_to_save].T)).T
+		'/nirag_kadakia/data/beh-NMF/lorenz63'
+data = np.vstack((t, sol.T)).T
 np.savetxt('%s/0.txt' % dir, data, fmt='%.3f')
-plt.plot(sol[:, vars_to_save])
+plt.plot(sol)
+plt.show()
+
+plt.plot(sol[:, 0], sol[:, 1])
 plt.show()
