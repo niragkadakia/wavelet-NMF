@@ -71,3 +71,10 @@ for seed in range(10):
 	# Save
 	np.savetxt('../data/%s.txt' % seed, sol, fmt='%.4f', delimiter='\t')
 	
+	plt.subplot(211)
+	plt.plot(I_vec[:200])
+	box = np.ones(5)/5
+	plt.plot(np.convolve(I_vec[:200], box, mode='same'))
+	plt.subplot(212)
+	plt.plot(sol[:, 0])
+	plt.show()
