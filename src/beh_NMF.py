@@ -666,16 +666,17 @@ class correlate_multiple_vars(object):
 				
 				# Shift H2 to align to max correlation with H1; backshift W2
 				H2_shift = np.roll(H2, idx)
-				W2_shift = np.roll(W2, -idx, axis=1)
+				W2_shift = np.roll(W2, -idx, axis=0)
 				if idx < 0:
 					H2_shift[idx:] = 0
-					W2_shift[:, idx:] = 0
+					W2_shift[idx:] = 0
 				elif idx >= 0:
 					H2_shift[:idx] = 0
-					W2_shift[:, :idx] = 0
+					W2_shift[:idx] = 0
 				H = H1*H2_shift
 				W = np.vstack((W1.T, W2_shift.T))
-				
+				#plt.imshow(W)
+				#plt.show()
 				X = np.zeros((nFreqs, len(H)))
 				for iF in range(nFreqs):
 					X[iF] = np.convolve(W[iF], H, mode='same')
@@ -754,6 +755,19 @@ class correlate_multiple_vars(object):
 		W-pattern and H-corresponding to it.
 		"""
 		
+		
+		self.raw_data = load_raw_data(self.exp_dir, self.exp_name)
+		self.subsample = int(self.metadata['Raw data']['subsample'])
+		length_data = int(self.metadata['Raw data']['length'])
+		if length_data == -1:
+			length_data = self.raw_data.shape[0]
+		self.Xx = self.raw_data[:length_data*self.subsample:self.subsample, 1:]
+		self.X_var1 = self.Xx[:, self.var1]
+		self.X_var2 = self.Xx[:, self.var2]
+		self.Tt = self.raw_data[:length_data*self.subsample:self.subsample, 0]
+		self.dt = self.Tt[1] - self.Tt[0]
+		self.nT = len(self.Tt)
+	
 		_data = load_2_var_tSNE(self.exp_dir, self.exp_name, 0, 1, 0)
 		cluster_xys = _data['cluster_xys']
 		_data = load_2_var_XWHs(self.exp_dir, self.exp_name, 
@@ -769,10 +783,44 @@ class correlate_multiple_vars(object):
 			ax_h.clear()
 			ax_h.plot(self.Hs[idx])
 			ax_w.clear()
+			
 			ax_w.set_xlim(0, 500)
 			ax_w.pcolormesh(self.Ws[idx][::-1])
 			
-		fig, (ax_tsne, ax_h, ax_w) = plt.subplots(3)
+			ax_phase.clear()
+			color = self.Hs[idx]/max(self.Hs[idx])
+			idx_to_plot = color > 0
+			ax_phase.scatter(self.X_var1[idx_to_plot], self.X_var2[idx_to_plot], 
+				c=color[idx_to_plot], s=15, alpha=0.9)
+			ax_phase.set_xlim(min(self.X_var1), max(self.X_var1))
+			ax_phase.set_ylim(min(self.X_var2), max(self.X_var2))
+			
+			#ax_raw.set_xlim(self.Tt[0], self.Tt[-1])
+			from scipy.signal import find_peaks
+			ax_raw.clear()
+			ax_raw2.clear()
+			peaks, _ = find_peaks(self.Hs[idx])
+			wind = 25
+			
+			## Below is incorrect -- chagen endpoints			
+			for peak in peaks:
+			
+				if self.Hs[idx][peak]/max(self.Hs[idx]) < 0.5:
+					continue
+				if peak < wind:
+					continue
+				else:
+					min_pk = peak - wind
+				if peak > self.nT - wind:
+					continue
+				else:
+					max_pk = peak + wind
+				ax_raw.plot(self.X_var1[min_pk: max_pk])
+				ax_raw2.plot(self.X_var2[min_pk: max_pk])
+				
+			
+			
+		fig, (ax_tsne, ax_h, ax_w, ax_phase, ax_raw, ax_raw2) = plt.subplots(6)
 		tsne_pts = ax_tsne.scatter(cluster_xys[:, 0], 
 								   cluster_xys[:, 1], s=10)
 		selector = hover_select(fig, ax_tsne, tsne_pts, update_selected_WH)
