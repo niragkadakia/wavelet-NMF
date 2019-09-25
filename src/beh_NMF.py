@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from sklearn import decomposition
 from sklearn import manifold
+from scipy.signal import find_peaks
 import pywt
 
 from load_save_data import *
@@ -790,19 +791,17 @@ class correlate_multiple_vars(object):
 			ax_phase.clear()
 			color = self.Hs[idx]/max(self.Hs[idx])
 			idx_to_plot = color > 0
-			ax_phase.scatter(self.X_var1[idx_to_plot], self.X_var2[idx_to_plot], 
-				c=color[idx_to_plot], s=15, alpha=0.9)
+			ax_phase.scatter(self.X_var1[idx_to_plot], 
+							 self.X_var2[idx_to_plot],
+							 c=color[idx_to_plot], s=15, alpha=0.9)
 			ax_phase.set_xlim(min(self.X_var1), max(self.X_var1))
 			ax_phase.set_ylim(min(self.X_var2), max(self.X_var2))
 			
-			#ax_raw.set_xlim(self.Tt[0], self.Tt[-1])
-			from scipy.signal import find_peaks
 			ax_raw.clear()
 			ax_raw2.clear()
 			peaks, _ = find_peaks(self.Hs[idx])
 			wind = 25
 			
-			## Below is incorrect -- chagen endpoints			
 			for peak in peaks:
 			
 				if self.Hs[idx][peak]/max(self.Hs[idx]) < 0.5:
@@ -817,8 +816,6 @@ class correlate_multiple_vars(object):
 					max_pk = peak + wind
 				ax_raw.plot(self.X_var1[min_pk: max_pk])
 				ax_raw2.plot(self.X_var2[min_pk: max_pk])
-				
-			
 			
 		fig, (ax_tsne, ax_h, ax_w, ax_phase, ax_raw, ax_raw2) = plt.subplots(6)
 		tsne_pts = ax_tsne.scatter(cluster_xys[:, 0], 
