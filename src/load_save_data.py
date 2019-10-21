@@ -17,6 +17,7 @@ import pickle
 import gzip
 import datetime
 import h5py
+import time
 
 
 def get_data_dir():
@@ -44,6 +45,20 @@ def get_analysis_dir():
 	"""	
 	
 	return load_settings()["Folders"]["analysis_dir"]
+
+def get_walk_assay_pkl_data_dir():
+	"""
+	Get the local directory where pkl objects from the Drosophila 
+	smoke walking assay are saved.
+	
+	Returns
+	-------
+	
+	dir: str
+		Absolute path of  directory
+	"""	
+
+	return load_settings()["Folders"]["walk_assay_pkl_data_dir"]
 
 def load_settings():
 	"""
@@ -114,6 +129,53 @@ def load_raw_data(exp_dir, exp_name):
 	raw_data = np.loadtxt(filename)
 	
 	return raw_data
+
+def load_walk_assay_pkl(pkl_file=None, subdir=None, file=None,
+						   assay_type=None):
+	"""
+	Load pickled experimental matrix file from recorded dataset of the 
+	Drosophila smoke odor walking assay.	
+	
+	Args:
+		pkl_file: string of full path for pkl file.
+		subdir: string of directory within mahmut_demir/analysis
+		file: string of encounter dataset file (-.mat)
+		assay_type: structure of .mat to load.
+		
+		If either subdir or file is supplied, pkl_file will be ignored
+			and pkl_file will be created from subdir and file. One of 
+			these three must be supplied however.
+		
+	Returns:
+		exp_matrix_dict: Ordered dictionary whose keys are the encounter 
+			events, e.g. 'trjn' = trajectory number; 'sx' = signal x-position.
+			The dictionary values are arrays whose values are the value of 
+			that key at all framenumbers (combined over all trajectories 
+			and videos)
+	"""
+	
+	time_start = time.time()
+	
+	print ('Loading walking assay data...')
+	if pkl_file is not None:
+		pass
+	elif (subdir is not None) and (file is not None):
+		out_dir = '%s/%s' % (get_walk_assay_pkl_data_dir(), subdir)
+		if assay_type is None:
+			pkl_file = '%s/%s.pkl' % (out_dir, file)
+		else:
+			pkl_file = '%s/%s/%s.pkl' % (out_dir, file, assay_type)
+	else:
+		print ("Must supply pickle filename in pkl_file or the subdirectory" \
+				"and filename in 'subdir' and path'")
+		quit()
+	
+	with open(pkl_file, 'rb') as f:
+		exp_matrix_dict = pickle.load(f, encoding='latin1')
+	
+	print('Loaded pkl file in %.3f seconds' % (time.time() - time_start))
+	
+	return exp_matrix_dict
 
 def save_cwt_matrix(cwt_matrix, exp_dir, exp_name):
 	"""
