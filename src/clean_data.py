@@ -41,3 +41,38 @@ def get_behaving_trjn(trjn, behaving):
 		
 	return behaving_trjn
 
+def get_trj_dict(N, variables, dict):
+	"""
+	Write a dictionary with variables for a given trajectory number.
+	
+	Args
+	-------
+	N: int
+		trajectory number of interest
+		
+	variables: list
+		variable names (as strings) of interest
+		
+	dict: dictionary
+		previously loaded from .pkl
+		
+	Returns
+	-------
+	trj_dict: dictionary
+		dictionary with variable names as keys
+	"""
+	
+	trj_dict = dict.fromkeys(variables, [])
+	
+	for i in range(len(dict['trjn'])):				
+		if trjn[i] == float(N):
+			if 'fps' in variables:
+				trj_dict['fps']  = dict['fps'][i]
+				variables.remove('fps')
+			for v in variables:
+				V = dict[v]
+				trj_dict[v].append(V[i])
+		else: 
+			pass
+	
+	return trj_dict
