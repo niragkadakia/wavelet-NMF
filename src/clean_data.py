@@ -9,26 +9,24 @@ Helen Cai
 # Libraries: 
 # Use base python for now
 
-def get_behaving_trjn(trjn, behaving):
+def get_behaving_trjn(dict):
 	"""
 	Figure out which trajectories are "behaving"
 	
 	Args
 	-------
-	trjn: float64
-		trajectory numbers, previously loaded from .pkl
-		
-	behaving: bool
-		indicates if a fly is behaving, previously loaded from .pkl
+	dict: dictionary
+		assay data, previously loaded from .pkl
 		
 	Returns
 	-------
-
 	behaving_trjn: dictionary
 		true booleans for all trajectory numbers that are behaving
 	"""
 	
 	behaving_trjn = {}
+	trjn = dict['trjn']
+	behaving = dict['behaving']
 	
 	for i in range(len(trjn)):
 		if behaving_trjn.get(int(trjn[i])) == None:
@@ -48,13 +46,11 @@ def get_trj_dict(N, variables, dict):
 	Args
 	-------
 	N: int
-		trajectory number of interest
-		
+		trajectory number of interest	
 	variables: list
-		variable names (as strings) of interest
-		
+		variable names (as strings) of interest		
 	dict: dictionary
-		previously loaded from .pkl
+		assay data, previously loaded from .pkl
 		
 	Returns
 	-------
