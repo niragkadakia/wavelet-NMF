@@ -62,15 +62,20 @@ def get_trj_dict(N, variables, dict):
 		dictionary with variable names as keys
 	"""
 	
-	trj_dict = dict.fromkeys(variables, [])
+	trj_dict = {}
 	
+	for v in variables:
+		trj_dict[v] = []
+	
+	trj_dict['trjn'] = N
+		
 	for i in range(len(dict['trjn'])):				
 		if dict['trjn'][i] == float(N):
 			if 'fps' in variables:
 				trj_dict['fps']  = dict['fps'][i]
-				variables.remove('fps')
-			for v in variables:
-				trj_dict[v].append(dict[v][i])
+				variables.remove('fps')				
+			for var in variables:
+				trj_dict[var].append(dict[var][i])
 		else: 
 			pass
 	
